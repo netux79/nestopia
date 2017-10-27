@@ -194,8 +194,8 @@ static const byte nes_classic_fbx_fs_palette[64][3] =
   {0xB9,0xEA,0xE9}, {0xAB,0xAB,0xAB}, {0x00,0x00,0x00}, {0x00,0x00,0x00}
 };
 
-int crossx = 0;
-int crossy = 0;
+int zapx = 0;
+int zapy = 0;
 
 #define CROSSHAIR_SIZE 3
 
@@ -338,11 +338,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    const retro_system_timing timing = { is_pal ? 50.0 : 60.0, 44100.0 };
    info->timing = timing;
 
-   // It's better if the size is based on NTSC_WIDTH if the filter is on
    const retro_game_geometry geom = {
       Api::Video::Output::WIDTH - (overscan_h ? 16 : 0),
       Api::Video::Output::HEIGHT - (overscan_v ? 16 : 0),
-      Api::Video::Output::NTSC_WIDTH,
+      Api::Video::Output::WIDTH,
       Api::Video::Output::HEIGHT,
       get_aspect_ratio(),
    };
@@ -437,18 +436,20 @@ static void update_input()
    input->vsSystem.insertCoin = 0;
    
    if (Api::Input(emulator).GetConnectedController(1) == 5) {
-      static int zapx = overscan_h ? 8 : 0; 
-      static int zapy = overscan_v ? 8 : 0;
+#ifdef GEKKO
+      /* For Wii we need the lightgun info as absolute coords to work properly */
+      zapx = (input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_X) * Api::Video::Output::WIDTH / 640);
+      zapy = (input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_Y) * Api::Video::Output::HEIGHT / 480);
+#else
       zapx += input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_X);
       zapy += input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_Y);
    
-      if (zapx >= 256) { crossx = 255; }
-      else if (zapx <= 0) { crossx = 0; }
-      else {crossx = zapx; }
+      if (zapx >= 256) { zapx = 255; }
+      else if (zapx <= 0) { zapx = 0; }
       
-      if (zapy >= 240) { crossy = 239; }
-      else if (zapy <= 0) { crossy = 0; }
-      else {crossy = zapy; }
+      if (zapy >= 240) { zapy = 239; }
+      else if (zapy <= 0) { zapy = 0; }
+#endif
       
       if (input_state_cb(1, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER)) {
          input->zapper.x = zapx;
@@ -795,7 +796,7 @@ void retro_run(void)
    emulator.Execute(video, audio, input);
 
    if (Api::Input(emulator).GetConnectedController(1) == 5)
-      draw_crosshair(crossx, crossy);
+      draw_crosshair(zapx, zapy);
    
    unsigned frames = is_pal ? 44100 / 50 : 44100 / 60;
    for (unsigned i = 0; i < frames; i++)
